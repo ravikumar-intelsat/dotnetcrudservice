@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""
+RAG (Retrieval-Augmented Generation) Application using Ollama
+Extracts PDF text, stores in vector DB, and enables semantic search with context-aware answers
+"""
+
+import PyPDF2
+import requests
+import json
+import sys
+import time
+import re
+import os
+from typing import List, Dict
+
+try:
+    import chroma
+    from chromadb.config import Settings
+    import chromadb
+except ImportError:
+    print("Installing chromadb...")
+    os.system("pip install chromadb -q")
+    import chromadb
+
+
+class RAGApp:
+    def __init__(self):
+        self.client = None
+        self.collection = None
+        self.ollama_url = "http://localhost:11434"
+        
+    def wait_for_ollama(self, max_retries=30, timeout=5):
+        """Wait for Ollama server to be ready"""
+        for i in range(max_retries):
+            try:
+                response = requests.get(f'{self.ollama_url}/api/tags', timeout=timeout)
+                if response.status_code == 200:
+                    print("✓ Ollama server is ready!")
+                    return True
+            except:
+                pass
+            
+            if i < max_retries - 1:
+                print(f"  Waiting for Ollama... ({i+1}/{max_retries})")
+                time.sleep(2)
+        
+        return False
+    
+    def extract_pdf_text(self, pdf_path):
+        """Extract text from PDF file"""
+        try:
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text = "".join(page.extract_text() or "" for page in reader.pages)
+            return text
+        except Exception as e:
+            print(f"Error extracting PDF: {e}")
+            return ""
+    
+    def chunk_text(self, text, chunk_size=500, overlap=100):
+        """Split text into overlapping chunks"""
+        chunks = []
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        current_chunk = ""
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) < chunk_size:
+                current_chunk += sentence + " "
+            else:
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence + " "
+        
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        return chunks
+    
+    def get_embedding(self, text):
+        """Get embedding from Ollama using nomic-embed-text"""
+        try:
+            response = requests.post(
+                f'{self.ollama_url}/api/embed',
+                json={"model": "nomic-embed-text", "input": text},
+                timeout=60
+            )
+            if response.status_code == 200:
+                return response.json()['embeddings'][0]
+            else:
+                print(f"Embedding error: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"Error getting embedding: {e}")
+            return None
+    
+    def initialize_db(self):
+        """Initialize Chroma vector database"""
+        try:
+            self.client = chromadb.Client()
+            self.collection = self.client.create_collection(
+                name="pdf_documents",
+                metadata={"hnsw:space": "cosine"}
+            )
+            print("✓ Vector database initialized")
+            return True
+        except Exception as e:
+            print(f"Error initializing database: {e}")
+            return False
+    
+    def add_documents(self, pdf_file):
+        """Extract PDF and add chunks to vector database"""
+        print(f"\n1. Extracting text from {pdf_file}...")
+        text = self.extract_pdf_text(pdf_file)
+        
+        if not text.strip():
+            print(f"   ⚠ PDF appears to be image-based or empty (0 characters extracted)")
+            text = "Resume submitted - unable to extract text content"
+        else:
+            print(f"   ✓ Extracted {len(text)} characters")
+        
+        print("\n2. Chunking text...")
+        chunks = self.chunk_text(text, chunk_size=500, overlap=100)
+        print(f"   ✓ Created {len(chunks)} chunks")
+        
+        print("\n3. Adding documents to vector database...")
+        ids = []
+        documents = []
+        metadatas = []
+        
+        for i, chunk in enumerate(chunks):
+            ids.append(f"chunk_{i}")
+            documents.append(chunk)
+            metadatas.append({"source": pdf_file, "chunk": i})
+        
+        try:
+            self.collection.add(
+                ids=ids,
+                documents=documents,
+                metadatas=metadatas
+            )
+            print(f"   ✓ Added {len(chunks)} chunks to database")
+            return True
+        except Exception as e:
+            print(f"   ✗ Error adding documents: {e}")
+            return False
+    
+    def retrieve(self, query, top_k=3):
+        """Retrieve relevant documents from vector database"""
+        try:
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=top_k
+            )
+            
+            documents = results['documents'][0] if results['documents'] else []
+            distances = results['distances'][0] if results['distances'] else []
+            
+            return [(doc, 1 - dist) for doc, dist in zip(documents, distances)]
+        except Exception as e:
+            print(f"Error retrieving documents: {e}")
+            return []
+    
+    def generate_response(self, query, context_docs):
+        """Generate response using retrieved context"""
+        context = "\n".join([f"- {doc}" for doc, score in context_docs])
+        
+        prompt = f"""Based on the following context from the document, answer the question:
+
+CONTEXT:
+{context}
+
+QUESTION:
+{query}
+
+ANSWER:"""
+        
+        try:
+            response = requests.post(
+                f'{self.ollama_url}/api/generate',
+                json={
+                    "model": "gemma:2b",
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=300
+            )
+            
+            if response.status_code == 200:
+                return response.json().get('response', 'No response generated')
+            else:
+                return f"Error: HTTP {response.status_code}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def query(self, query):
+        """Main RAG query function"""
+        print(f"\n📝 Query: {query}")
+        
+        # Retrieve relevant documents
+        context_docs = self.retrieve(query, top_k=3)
+        
+        if not context_docs:
+            print("   ⚠ No relevant documents found")
+            return
+        
+        print(f"   ✓ Retrieved {len(context_docs)} relevant chunks")
+        
+        # Generate response with context
+        print("   🤖 Generating response...")
+        response = self.generate_response(query, context_docs)
+        
+        print("\n" + "=" * 80)
+        print("RESPONSE")
+        print("=" * 80)
+        print(response)
+        print("=" * 80)
+
+
+def main():
+    print("=" * 80)
+    print("RAG Application with Ollama")
+    print("=" * 80)
+    
+    rag = RAGApp()
+    
+    # Wait for Ollama
+    print("\n1. Checking Ollama server...")
+    if not rag.wait_for_ollama():
+        print("   ✗ Ollama server is not available!")
+        print("   Make sure Ollama is running: ollama serve")
+        sys.exit(1)
+    
+    # Initialize database
+    print("\n2. Initializing vector database...")
+    if not rag.initialize_db():
+        print("   ✗ Failed to initialize database")
+        sys.exit(1)
+    
+    # Load and index PDF
+    pdf_file = '2.pdf'
+    if not rag.add_documents(pdf_file):
+        print("   ✗ Failed to add documents")
+        sys.exit(1)
+    
+    # Example queries
+    print("\n" + "=" * 80)
+    print("EXAMPLE QUERIES")
+    print("=" * 80)
+    
+    queries = [
+        "What is the candidate's total years of experience?",
+        "What are the main technical skills and technologies?",
+        "What projects has the candidate worked on?",
+        "What is the candidate's current role and company?"
+    ]
+    
+    for query in queries:
+        rag.query(query)
+        print("\n")
+
+
+if __name__ == "__main__":
+    main()

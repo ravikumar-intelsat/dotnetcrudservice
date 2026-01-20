@@ -1,0 +1,233 @@
+================================================================================
+                    RESUME RAG SYSTEM - COMPLETE OVERVIEW
+================================================================================
+
+PROJECT STRUCTURE:
+─────────────────────────────────────────────────────────────────────────────
+
+  ┌─ Frontend (React) ─────────────────────────────────────────┐
+  │ ├─ rag-ui/src/App.jsx              [Main component]       │
+  │ ├─ rag-ui/src/components/          [Chat interface]       │
+  │ ├─ rag-ui/src/styles/              [CSS styling]          │
+  │ └─ rag-ui/public/index.html         [HTML root]           │
+  │                                                             │
+  │ npm dependencies: react, react-dom, axios, vite           │
+  │ Runs on: localhost:3000                                   │
+  └──────────────────────────────────────────────────────────────┘
+                               ↕ axios HTTP
+  ┌─ Backend (Flask) ──────────────────────────────────────────┐
+  │ ├─ backend.py                      [REST API]             │
+  │ │  ├─ GET  /health                                        │
+  │ │  ├─ POST /api/query                                     │
+  │ │  ├─ POST /api/load-pdf                                  │
+  │ │  └─ GET  /api/stats                                     │
+  │ │                                                          │
+  │ │ pip: flask, flask-cors                                  │
+  │ └─ Runs on: localhost:5000                                │
+  └──────────────────────────────────────────────────────────────┘
+                              ↕ Python import
+  ┌─ RAG Engine (pdf_assessment.py) ───────────────────────────┐
+  │                                                             │
+  │ Pipeline:                                                   │
+  │ 1. Extract PDF → PyPDF2                                   │
+  │ 2. Chunk text → 500 char chunks                           │
+  │ 3. Embed chunks → all-MiniLM-L6-v2                        │
+  │ 4. Store in DB → Chromadb                                 │
+  │ 5. Retrieve → Top-3 semantic search                       │
+  │ 6. Generate → Send to Ollama                              │
+  │ 7. Return → Answer + chunks + score                       │
+  │                                                             │
+  │ pip: PyPDF2, chromadb, requests, ollama                   │
+  └──────────────────────────────────────────────────────────────┘
+          ↕ HTTP REST                    ↕ HTTP REST
+  ┌───────────────────────┐      ┌────────────────────────┐
+  │  Chromadb Vector DB   │      │  Ollama LLM API        │
+  │                       │      │                        │
+  │ • All embeddings      │      │ • Model: gemma:2b      │
+  │ • Vector storage      │      │ • Text generation      │
+  │ • Similarity search   │      │ • No internet needed   │
+  │ • Cosine distance     │      │ • Local inference      │
+  │                       │      │                        │
+  │ localhost (embedded)  │      │ localhost:11434        │
+  └───────────────────────┘      └────────────────────────┘
+
+
+DATA FLOW - USER QUERY:
+─────────────────────────────────────────────────────────────────────────────
+
+User Types: "What is the candidate's current role?"
+         ↓
+React Frontend captures input
+         ↓
+axios POST to /api/query
+    { question: "What is the candidate's current role?" }
+         ↓
+Flask Backend receives request
+         ↓
+RAGApp.query() executes:
+    ├─ retrieve(question)
+    │  ├─ Convert question to embedding (all-MiniLM-L6-v2)
+    │  ├─ Search Chromadb vector store
+    │  ├─ Get top-3 similar chunks
+    │  └─ Return: [chunk1, chunk2, chunk3] with scores
+    │
+    ├─ generate_response(question, chunks)
+    │  ├─ Combine question + context
+    │  ├─ Send to Ollama API
+    │  ├─ gemma:2b generates answer
+    │  └─ Stream or get complete response
+    │
+    └─ Format response
+         ├─ Answer text
+         ├─ Retrieved chunks with scores
+         └─ Processing time
+         ↓
+Flask returns JSON:
+{
+  "response": "The candidate is a Senior Consultant...",
+  "chunks": [
+    { "text": "Senior Consultant at Capgemini...", "score": 0.945 },
+    { "text": "Professional Experience section...", "score": 0.873 },
+    { "text": "July 2022 – January 2026...", "score": 0.821 }
+  ],
+  "retrievalTime": 2.34
+}
+         ↓
+React receives response
+         ↓
+Display in chat interface:
+├─ User message bubble
+├─ Assistant response
+├─ Expandable chunks section
+└─ Response timing
+
+
+PORTS & ENDPOINTS:
+─────────────────────────────────────────────────────────────────────────────
+
+Frontend:
+  http://localhost:3000
+
+Backend APIs:
+  GET  http://localhost:5000/health          ← Server status
+  POST http://localhost:5000/api/query       ← Ask question
+  POST http://localhost:5000/api/load-pdf    ← Load PDF
+  GET  http://localhost:5000/api/stats       ← Statistics
+
+Ollama:
+  http://localhost:11434                     ← LLM API
+  Model: gemma:2b
+
+
+FILES & PURPOSES:
+─────────────────────────────────────────────────────────────────────────────
+
+CORE APPLICATION:
+  backend.py                 Flask REST API server
+  pdf_assessment.py          RAG engine (existing, integrated)
+  rag-ui/                    React frontend
+
+CONFIGURATION:
+  rag-ui/vite.config.js      Vite build configuration
+  rag-ui/package.json        npm dependencies & scripts
+
+DOCUMENTATION:
+  QUICKSTART.md              5-minute getting started
+  README_FINAL.md            Complete reference
+  SETUP_COMPLETE.md          Detailed setup info
+  rag-ui/README.md           React/API documentation
+  SYSTEM_OVERVIEW.txt        This file
+  requirements.txt           Python dependencies
+
+UTILITIES:
+  start.sh                   One-click start all services
+  verify-setup.sh            Verify installation
+
+
+QUICK START:
+─────────────────────────────────────────────────────────────────────────────
+
+Prerequisite: Make sure Ollama is running
+  $ ollama serve
+
+Then run:
+  $ cd /workspaces/dotnetcrudservice
+  $ bash start.sh
+
+Or manually:
+  Terminal 1: python3 backend.py
+  Terminal 2: cd rag-ui && npm run dev
+
+Then open: http://localhost:3000
+
+
+PERFORMANCE METRICS:
+─────────────────────────────────────────────────────────────────────────────
+
+First Query:           3-5s  (model warm-up)
+Subsequent Queries:    1-3s  (model cached)
+Vector Search:       0.5-1s  (Chromadb)
+LLM Generation:      1-3s    (Ollama gemma:2b)
+Frontend Load:       <1s     (React dev)
+
+
+SUGGESTED QUESTIONS (Pre-configured):
+─────────────────────────────────────────────────────────────────────────────
+
+1. "What is the candidate's current role?"
+2. "What technologies does the candidate know?"
+3. "How many years of experience does the candidate have?"
+4. "What are the main projects listed in the resume?"
+5. "What companies has the candidate worked for?"
+6. "What are the candidate's key skills and expertise?"
+
+
+TROUBLESHOOTING QUICK REFERENCE:
+─────────────────────────────────────────────────────────────────────────────
+
+Problem                     Solution
+─────────────────────────   ────────────────────────────
+Backend not responding      python3 backend.py
+React shows blank page      Hard refresh (Ctrl+Shift+R)
+No Ollama connection        ollama serve
+Port already in use         lsof -i :PORT → kill PID
+Slow responses              Wait for warm-up, check resources
+Error in browser console    Check F12 DevTools
+
+Verify setup:
+  $ bash verify-setup.sh
+
+
+ARCHITECTURE SUMMARY:
+─────────────────────────────────────────────────────────────────────────────
+
+LAYER 1: Frontend UI
+  └─ React 19, Vite, Axios
+     └─ Chat interface with 6 suggested questions
+
+LAYER 2: API Gateway
+  └─ Flask with CORS
+     └─ REST endpoints with error handling
+
+LAYER 3: RAG Engine
+  └─ PDF → Chunks → Embeddings → Vector DB → Semantic Search
+     └─ + LLM Generation → Formatted Response
+
+LAYER 4: Inference
+  └─ Chromadb (vector search)
+     └─ Ollama API (LLM inference)
+
+
+NEXT STEPS:
+─────────────────────────────────────────────────────────────────────────────
+
+1. Verify setup:          bash verify-setup.sh
+2. Start Ollama:          ollama serve
+3. Start application:     bash start.sh
+4. Open browser:          http://localhost:3000
+5. Ask questions!         Click suggested questions or type
+
+
+================================================================================
+                              READY TO USE! 🚀
+================================================================================
