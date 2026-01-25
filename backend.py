@@ -110,6 +110,42 @@ def query():
         print(f"✗ Error processing query: {str(e)}")
         return jsonify({'error': f'Error processing query: {str(e)}'}), 500
 
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """
+    Direct chat endpoint (no retrieval)
+    Expects: { "message": "user message" }
+    Returns: { "response": "answer", "generationTime": float }
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'Missing message in request'}), 400
+
+        message = (data.get('message') or data.get('question') or '').strip()
+        if not message:
+            return jsonify({'error': 'Message cannot be empty'}), 400
+
+        if not rag_app:
+            return jsonify({'error': 'RAG application not initialized'}), 500
+
+        print(f"\n💬 Processing chat message: {message}")
+        start_time = time.time()
+
+        response_text = rag_app.generate_chat_response(message)
+        if not response_text or response_text.startswith("Error:"):
+            return jsonify({'error': response_text or 'Empty response from LLM'}), 502
+
+        return jsonify({
+            'response': response_text,
+            'generationTime': time.time() - start_time
+        })
+
+    except Exception as e:
+        print(f"✗ Error processing chat: {str(e)}")
+        return jsonify({'error': f'Error processing chat: {str(e)}'}), 500
+
 @app.route('/api/load-pdf', methods=['POST'])
 def load_pdf():
     """
