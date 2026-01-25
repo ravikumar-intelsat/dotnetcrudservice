@@ -43,7 +43,8 @@ const RAGInterface = () => {
 
     try {
       // Call the Python backend API
-      const response = await axios.post('http://localhost:5000/api/query', {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const response = await axios.post(`${apiBaseUrl}/api/query`, {
         question: queryText
       }, {
         timeout: 300000 // 5 minute timeout
@@ -59,7 +60,7 @@ const RAGInterface = () => {
 
     } catch (err) {
       console.error('Error:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to get response. Make sure the backend is running on localhost:5000');
+      setError(err.response?.data?.error || err.message || 'Failed to get response. Make sure the backend is running.');
       setMessages(prev => [...prev, {
         type: 'error',
         content: 'Sorry, I encountered an error processing your question. Please try again.'

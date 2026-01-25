@@ -14,20 +14,19 @@ import os
 from typing import List, Dict
 
 try:
-    import chroma
-    from chromadb.config import Settings
     import chromadb
 except ImportError:
-    print("Installing chromadb...")
-    os.system("pip install chromadb -q")
-    import chromadb
+    print("Chromadb is not installed. Please install dependencies first.")
+    raise
 
 
 class RAGApp:
     def __init__(self):
         self.client = None
         self.collection = None
-        self.ollama_url = "http://localhost:11434"
+        self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+        self.ollama_model = os.getenv("OLLAMA_MODEL", "gemma:3")
+        self.ollama_embed_model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
         
     def wait_for_ollama(self, max_retries=30, timeout=5):
         """Wait for Ollama server to be ready"""
@@ -77,18 +76,19 @@ class RAGApp:
         return chunks
     
     def get_embedding(self, text):
-        """Get embedding from Ollama using nomic-embed-text"""
+        """Get embedding from Ollama using embed model"""
         try:
             response = requests.post(
                 f'{self.ollama_url}/api/embed',
-                json={"model": "nomic-embed-text", "input": text},
+                json={"model": self.ollama_embed_model, "input": text},
                 timeout=60
             )
             if response.status_code == 200:
-                return response.json()['embeddings'][0]
-            else:
-                print(f"Embedding error: {response.status_code}")
-                return None
+                embeddings = response.json().get('embeddings', [])
+                return embeddings[0] if embeddings else None
+
+            print(f"Embedding error: {response.status_code}")
+            return None
         except Exception as e:
             print(f"Error getting embedding: {e}")
             return None
@@ -163,8 +163,16 @@ class RAGApp:
     def generate_response(self, query, context_docs):
         """Generate response using retrieved context"""
         context = "\n".join([f"- {doc}" for doc, score in context_docs])
-        
-        prompt = f"""Based on the following context from the document, answer the question:
+
+        if not context.strip():
+            prompt = f"""Answer the question directly:
+
+QUESTION:
+{query}
+
+ANSWER:"""
+        else:
+            prompt = f"""Based on the following context from the document, answer the question:
 
 CONTEXT:
 {context}
@@ -178,7 +186,7 @@ ANSWER:"""
             response = requests.post(
                 f'{self.ollama_url}/api/generate',
                 json={
-                    "model": "gemma:2b",
+                    "model": self.ollama_model,
                     "prompt": prompt,
                     "stream": False
                 },
@@ -186,9 +194,10 @@ ANSWER:"""
             )
             
             if response.status_code == 200:
-                return response.json().get('response', 'No response generated')
-            else:
-                return f"Error: HTTP {response.status_code}"
+                answer = response.json().get('response', '')
+                return answer if answer else 'No response generated'
+
+            return f"Error: HTTP {response.status_code}"
         except Exception as e:
             return f"Error: {str(e)}"
     
