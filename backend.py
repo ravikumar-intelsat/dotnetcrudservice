@@ -28,6 +28,8 @@ def init_rag():
         rag_app = RAGApp()
         if not rag_app.wait_for_ollama():
             raise RuntimeError("Ollama server is not available")
+        if not rag_app.ensure_models():
+            raise RuntimeError("Required Ollama models are not available")
         print("✓ RAG application initialized successfully")
         return True
     except Exception as e:
@@ -160,6 +162,7 @@ def stats():
             'status': 'initialized',
             'ollama_url': rag_app.ollama_url,
             'model': rag_app.ollama_model,
+            'embed_model': rag_app.ollama_embed_model,
             'database_status': 'active' if rag_app.collection else 'inactive'
         })
     
