@@ -44,6 +44,52 @@ class RAGApp:
                 time.sleep(2)
         
         return False
+
+    def list_models(self):
+        """List available Ollama models"""
+        try:
+            response = requests.get(f'{self.ollama_url}/api/tags', timeout=20)
+            if response.status_code != 200:
+                print(f"Error listing models: HTTP {response.status_code}")
+                return []
+
+            data = response.json()
+            return [model.get('name') for model in data.get('models', [])]
+        except Exception as e:
+            print(f"Error listing models: {e}")
+            return []
+
+    def ensure_model(self, model_name):
+        """Ensure the given Ollama model is available"""
+        if not model_name:
+            return True
+
+        models = self.list_models()
+        if model_name in models:
+            return True
+
+        print(f"⬇️  Pulling Ollama model: {model_name}")
+        try:
+            response = requests.post(
+                f'{self.ollama_url}/api/pull',
+                json={"model": model_name, "stream": False},
+                timeout=600
+            )
+            if response.status_code == 200:
+                print(f"✓ Model ready: {model_name}")
+                return True
+
+            print(f"✗ Failed to pull model {model_name}: HTTP {response.status_code} {response.text}")
+            return False
+        except Exception as e:
+            print(f"✗ Error pulling model {model_name}: {e}")
+            return False
+
+    def ensure_models(self):
+        """Ensure main and embed models are available"""
+        main_ok = self.ensure_model(self.ollama_model)
+        embed_ok = self.ensure_model(self.ollama_embed_model)
+        return main_ok and embed_ok
     
     def extract_pdf_text(self, pdf_path):
         """Extract text from PDF file"""
