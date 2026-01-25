@@ -209,25 +209,30 @@ class RAGApp:
     def generate_response(self, query, context_docs):
         """Generate response using retrieved context"""
         context = "\n".join([f"- {doc}" for doc, score in context_docs])
+        prompt = (
+            "Based on the following context from the document, answer the question.\n\n"
+            "CONTEXT:\n"
+            f"{context}\n\n"
+            "QUESTION:\n"
+            f"{query}\n\n"
+            "ANSWER:"
+        )
 
-        if not context.strip():
-            prompt = f"""Answer the question directly:
+        return self._generate_with_prompt(prompt)
 
-QUESTION:
-{query}
+    def generate_chat_response(self, message):
+        """Generate response for direct chat (no retrieval)"""
+        prompt = (
+            "You are a helpful assistant. Answer the user's message directly.\n\n"
+            "USER:\n"
+            f"{message}\n\n"
+            "ASSISTANT:"
+        )
 
-ANSWER:"""
-        else:
-            prompt = f"""Based on the following context from the document, answer the question:
+        return self._generate_with_prompt(prompt)
 
-CONTEXT:
-{context}
-
-QUESTION:
-{query}
-
-ANSWER:"""
-        
+    def _generate_with_prompt(self, prompt):
+        """Send a prompt to Ollama and return the response"""
         try:
             response = requests.post(
                 f'{self.ollama_url}/api/generate',
@@ -238,7 +243,7 @@ ANSWER:"""
                 },
                 timeout=300
             )
-            
+
             if response.status_code == 200:
                 answer = response.json().get('response', '')
                 return answer if answer else 'No response generated'

@@ -45,6 +45,35 @@ body {
   background: #f5f5f5;
 }
 
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px 0;
+  background: #f5f5f5;
+}
+
+.tab-button {
+  border: none;
+  background: #e4e4e4;
+  color: #333;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  background: #d6d6d6;
+}
+
+.tab-button.active {
+  background: #667eea;
+  color: white;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
 @media (max-width: 768px) {
   .App-header h1 {
     font-size: 24px;
@@ -52,5 +81,9 @@ body {
 
   .App-header p {
     font-size: 14px;
+  }
+
+  .tab-bar {
+    padding: 10px 12px 0;
   }
 }
