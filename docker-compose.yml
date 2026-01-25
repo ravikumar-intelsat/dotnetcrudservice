@@ -12,7 +12,7 @@ services:
       dockerfile: docker/backend.Dockerfile
     environment:
       - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_MODEL=gemma:2b
+      - OLLAMA_MODEL=gemma3:1b
       - OLLAMA_EMBED_MODEL=nomic-embed-text
     ports:
       - "5001:5000"

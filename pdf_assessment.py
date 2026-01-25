@@ -25,7 +25,7 @@ class RAGApp:
         self.client = None
         self.collection = None
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-        self.ollama_model = os.getenv("OLLAMA_MODEL", "gemma:3")
+        self.ollama_model = os.getenv("OLLAMA_MODEL", "gemma3:1b")
         self.ollama_embed_model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
         
     def wait_for_ollama(self, max_retries=30, timeout=5):

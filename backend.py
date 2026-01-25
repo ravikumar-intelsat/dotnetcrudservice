@@ -159,7 +159,7 @@ def stats():
         return jsonify({
             'status': 'initialized',
             'ollama_url': rag_app.ollama_url,
-            'model': 'gemma:2b',
+            'model': rag_app.ollama_model,
             'database_status': 'active' if rag_app.collection else 'inactive'
         })
     

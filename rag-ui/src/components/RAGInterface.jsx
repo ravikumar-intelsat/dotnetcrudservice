@@ -43,7 +43,7 @@ const RAGInterface = () => {
 
     try {
       // Call the Python backend API
-      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://didactic-barnacle-q77wvgqprjx5hxx56-5001.app.github.dev';
       const response = await axios.post(`${apiBaseUrl}/api/query`, {
         question: queryText
       }, {
