@@ -26,6 +26,8 @@ def init_rag():
     global rag_app
     try:
         rag_app = RAGApp()
+        if not rag_app.wait_for_ollama():
+            raise RuntimeError("Ollama server is not available")
         print("✓ RAG application initialized successfully")
         return True
     except Exception as e:
@@ -67,10 +69,20 @@ def query():
         context_docs = rag_app.retrieve(question, top_k=3)
         
         if not context_docs:
-            return jsonify({'error': 'No relevant documents found'}), 400
+            # Fallback: answer directly without context
+            response_text = rag_app.generate_response(question, [])
+            if not response_text or response_text.startswith("Error:"):
+                return jsonify({'error': response_text or 'Empty response from LLM'}), 502
+            return jsonify({
+                'response': response_text,
+                'chunks': [],
+                'retrievalTime': time.time() - start_time
+            })
         
         # Generate response
         response_text = rag_app.generate_response(question, context_docs)
+        if not response_text or response_text.startswith("Error:"):
+            return jsonify({'error': response_text or 'Empty response from LLM'}), 502
         
         end_time = time.time()
         retrieval_time = end_time - start_time
